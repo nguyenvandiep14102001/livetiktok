@@ -155,6 +155,7 @@ export interface Student {
   team: number; // tổ 1..4 (0 = chưa có tổ, chỉ trong lúc đang chọn tổ)
   life: Life; // học bạ cả đời (server gửi về lúc vào lớp, cộng dồn trong buổi)
   lastTalkAt?: number; // lần cuối được tính 1 tương tác (chống gõ dồn)
+  enrolledAt: number; // lúc đóng học phí (tặng hoa/quà); 0 = chưa vào lớp ngồi / chưa được trả lời
 }
 
 export interface DeskGift {
@@ -433,7 +434,7 @@ export class Classroom {
     this.clock = Math.max(this.clock, now);
     let s = this.students.get(e.username);
     if (!s) {
-      s = { ...e, girl: hash(e.username) % 2 === 0, score: 0, session: 0, reachedAt: 0, streak: 0, lastActive: now, joinedAt: now, desk: [], days: 0, standLeft: 0, team: 0, life: emptyLife() };
+      s = { ...e, girl: hash(e.username) % 2 === 0, score: 0, session: 0, reachedAt: 0, streak: 0, lastActive: now, joinedAt: now, desk: [], days: 0, standLeft: 0, team: 0, life: emptyLife(), enrolledAt: 0 };
       // vào lớp giữa tiết: xếp ngay vào tổ ít người (đang giờ chọn tổ thì để bạn tự chọn, hết giờ cô xếp)
       if (GAME.teamPickSec > 0 && this.phase !== 'team') s.team = this.smallestTeam(now);
       this.students.set(e.username, s);
@@ -526,14 +527,20 @@ export class Classroom {
   }
 
 
+  /** Đã đóng học phí (tặng hoa) thì được ngồi ghế + trả lời. Tắt GAME.requireTuition thì ai cũng vào được. */
+  private isEnrolled(s: Student) {
+    return !GAME.requireTuition || s.enrolledAt > 0;
+  }
+
   /**
-   * 20 ghế: điểm tiết cao ngồi đầu; cùng điểm thì bạn còn tương tác (bình luận trong 10 phút) ngồi trước bạn đã im lâu
-   * (thường đã rời live), rồi ai đạt trước, rồi điểm cả buổi, rồi ai vào trước (chỗ không nhảy lung tung)
+   * 20 ghế: chỉ bạn đã đóng học phí. Điểm tiết cao ngồi đầu; cùng điểm thì bạn còn tương tác (bình luận trong 10 phút)
+   * ngồi trước bạn đã im lâu (thường đã rời live), rồi ai đạt trước, rồi điểm cả buổi, rồi ai vào trước
    */
   seats(n = GAME.seats): Student[] {
     const away = (s: Student) => (this.clock - s.lastActive > GAME.seatActiveMs ? 1 : 0);
     return [...this.students.values()]
-      .sort((a, b) => b.score - a.score || away(a) - away(b) || a.reachedAt - b.reachedAt || b.session - a.session || a.joinedAt - b.joinedAt)
+      .filter((s) => this.isEnrolled(s))
+      .sort((a, b) => b.score - a.score || away(a) - away(b) || a.reachedAt - b.reachedAt || b.session - a.session || a.enrolledAt - b.enrolledAt || a.joinedAt - b.joinedAt)
       .slice(0, n);
   }
   /** giờ của nhịp gần nhất (để xếp ghế biết ai đã im lâu) */
@@ -915,6 +922,8 @@ export class Classroom {
     // không mất lượt. Người xem thật thấy bảng trên điện thoại trễ hơn máy vài giây nên luôn gửi sau mốc này (chủ kênh 2026-11-05)
     if (GAME.quickRead && this.phase === 'question' && this.skewSamples > 1 && e.createTime + this.clockSkew < this.boardShownAt - GAME.earlySendGraceMs) return [];
     if (!this.isAttempt(this.q, e.comment) || this.tried.has(e.username)) return [];
+    // chưa đóng học phí (chưa tặng hoa): đáp án không tính, cũng không mất lượt — tặng hoa xong vẫn trả lời được câu đang hỏi
+    if (!this.isEnrolled(s)) return [];
     this.tried.add(e.username);
     this.stats.attempts++;
     if (!this.matches(this.q, e.comment)) {
@@ -948,10 +957,10 @@ export class Classroom {
     return [];
   }
 
-  /** Số bạn đang chơi: có bình luận trong 2 phút gần đây */
+  /** Số bạn đang chơi: đã đóng học phí và còn bình luận trong 2 phút gần đây */
   activePlayers(now: number) {
     let n = 0;
-    for (const s of this.students.values()) if (now - s.lastActive < GAME.activeWindowMs) n++;
+    for (const s of this.students.values()) if (this.isEnrolled(s) && now - s.lastActive < GAME.activeWindowMs) n++;
     return n;
   }
 
@@ -1012,9 +1021,11 @@ export class Classroom {
     this.talkDelta.set(s.username, d);
   }
 
-  /** Quà: luôn là hoa tặng cô, mỗi món quà = 10 tương tác (không nói ra). `count` = số món (combo) */
+  /** Quà: luôn là hoa tặng cô, mỗi món quà = 10 tương tác (không nói ra). `count` = số món (combo). Cũng là đóng học phí vào lớp. */
   gift(e: Person, coins: number, now: number, count = 1, giftName = ''): Say[] {
     const s = this.touch(e, now);
+    // đóng học phí: lần tặng hoa đầu tiên trong buổi → được ngồi ghế + trả lời câu hỏi
+    if (!s.enrolledAt) s.enrolledAt = now;
     this.addTalk(s, GAME.talkPerGift * Math.max(1, count));
     this.flowers++;
     this.lastFlowerAt = now;
@@ -1253,6 +1264,8 @@ export class Classroom {
   private recessChat(s: Student, e: ChatIn, now: number): Say[] {
     const r = this.recess;
     if (!r || r.stage !== 'play') return [];
+    // giờ ra chơi cũng chỉ bạn đã đóng học phí mới chơi được (còn thả tim thì like() xử lý riêng)
+    if (!this.isEnrolled(s) && r.game !== 'heart') return [];
     const word = plain(e.comment);
     if (r.game === 'rps' && word in RPS && !r.rps.has(s.username)) r.rps.set(s.username, word as Rps);
     if (r.game === 'pick' && (word === '1' || word === '2') && !r.votes.has(s.username)) r.votes.set(s.username, word === '1' ? 1 : 2);
@@ -1631,6 +1644,7 @@ export class Classroom {
   private showChat(s: Student, e: ChatIn, now: number): Say[] {
     const sh = this.show;
     if (!sh || sh.stage !== 'ask' || !this.boardShown) return [];
+    if (!this.isEnrolled(s)) return []; // game lớn: chưa đóng học phí thì không trả lời
     const st = sh.steps[sh.i];
     if (st.k === 'mc' && sh.mc) {
       // tiếp sức: thử thách cuối, ai có phiếu gõ "gợi ý" thì cô bỏ 2 đáp án sai cho cả phòng (mỗi câu 1 lần)
@@ -1762,6 +1776,76 @@ export class Classroom {
       honors: sh.honors,
       sectionNo: sh.steps.slice(0, sh.i + 1).filter((x) => x.k === 'section').length,
     };
+  }
+
+  /**
+   * Nút "Reset game": xoá hết dữ liệu tương tác trong buổi (ghế, học phí, điểm buổi, hoa, tổ, bảng đua...),
+   * rồi bắt đầu lại tiết 1. Không đụng sổ câu đã hỏi / câu bị cấm trên server.
+   */
+  resetSession(now: number): Say[] {
+    this.students.clear();
+    this.round = 0;
+    this.qNo = 0;
+    this.q = null;
+    this.roundQs = [];
+    this.tiles = [];
+    this.revealed = new Set();
+    this.bonusUsed = false;
+    this.quietSaid = false;
+    this.correct = [];
+    this.tried = new Set();
+    this.wrong = new Set();
+    this.seq = 0;
+    this.stats = { received: 0, attempts: 0 };
+    this.flowers = 0;
+    this.lastFlowerAt = 0;
+    this.clapUntil = 0;
+    this.lastChatAt = now;
+    this.lastSeenAt = now;
+    this.review = false;
+    this.lastIdleAt = 0;
+    this.monitor = '';
+    this.champions = [];
+    this.recess = null;
+    this.lastRecess = null;
+    this.weekDelta.clear();
+    this.lifeDelta.clear();
+    this.talkDelta.clear();
+    this.vote = null;
+    this.topic = '';
+    this.lastTopics = [];
+    this.birthdayDone = new Set();
+    this.lastBirthdayAt = -Infinity;
+    this.birthday = null;
+    this.goodbyeAt = 0;
+    this.love = null;
+    this.poll = null;
+    this.lastLoveAt = now;
+    this.engageNo = 0;
+    this.walk = null;
+    this.flowerBase = 0;
+    this.flowerDelta = 0;
+    this.fundParty = null;
+    this.giftPile = [];
+    this.teamWins = Array(GAME.teamCount).fill(0);
+    this.lastTeamWin = [];
+    this.teamReminded = false;
+    this.show = null;
+    this.showNo = 0;
+    this.titles.clear();
+    this.announce = [];
+    this.cardAt.clear();
+    this.lastCardAt = -Infinity;
+    this.boardShown = false;
+    this.boardShownAt = 0;
+    this.clockSkew = 0;
+    this.skewSamples = 0;
+    this.answerStartAt = 0;
+    this.chatterUsed = 0;
+    this.warned = false;
+    this.heldMs = 0;
+    this.outfit = GAME.outfits[Math.floor(this.rand() * GAME.outfits.length)];
+    return this.newRound(now);
   }
 
   newRound(now: number): Say[] {
@@ -2069,11 +2153,11 @@ export class Classroom {
       teamWin: this.lastTeamWin,
       // giờ chọn tổ: số bạn chưa có tổ (hết giờ cô xếp)
       noTeam: this.phase === 'team' ? [...this.students.values()].filter((s) => !s.team).length : 0,
-      // sĩ số: bạn đang ngồi trong lớp / bạn còn tương tác (10 phút) mà chưa có ghế, đang chờ vào lớp
+      // sĩ số: bạn đã đóng học phí đang ngồi / còn tương tác mà chưa có ghế (lớp đầy)
       roster: (() => {
         const inClass = Math.min(GAME.seats, seated.length);
         let active = 0;
-        for (const s of this.students.values()) if (now - s.lastActive <= GAME.seatActiveMs) active++;
+        for (const s of this.students.values()) if (this.isEnrolled(s) && now - s.lastActive <= GAME.seatActiveMs) active++;
         const activeSeated = seated.slice(0, GAME.seats).filter((s) => now - s.lastActive <= GAME.seatActiveMs).length;
         return { seated: inClass, seats: GAME.seats, waiting: Math.max(0, active - activeSeated) };
       })(),

@@ -159,6 +159,9 @@ export const GAME = {
   // hiện ở bảng "Sĩ số · Đang chờ vào lớp"
   standing: 0,
   joinKeywords: ['vaolop'],
+  // Học phí vào lớp (chủ kênh 2026-11-05): phải tặng hoa/quà cô 1 lần trong buổi mới được ngồi ghế và trả lời câu hỏi.
+  // Bình luận / thả tim / chọn tổ vẫn được; chưa đóng học phí thì đáp án không tính, cũng không mất lượt.
+  requireTuition: true,
 
   // ---------- Quà: chia bậc bó hoa + quỹ hoa của cô (bản riêng, chủ kênh chốt 2026-11-04) ----------
   // bậc theo số xu của món quà (kim cương x số lượng). Mỗi xu = 1 bông vào quỹ hoa.

@@ -170,7 +170,20 @@ export function useGame() {
       if (!room) return;
       if (c.action === 'speak' && c.text) voice.say(c.text, true);
       if (c.action === 'setRate' && c.text) voice.rate = Number(c.text) || 1;
-      if (c.action === 'reset' || (c.action === 'custom' && c.text === 'newRound')) {
+      // Reset game: xoá hết ghế / học phí / điểm buổi / hoa / tổ... rồi vào tiết 1 lại
+      if (c.action === 'reset') {
+        voice.stop();
+        chatter.current = [];
+        mainSpeaking.current = 0;
+        talk.greeter.reset();
+        talk.gifts.reset();
+        talk.follows.reset();
+        likeBase.current = null;
+        setLastGift(null);
+        say(room.resetSession(Date.now()));
+      }
+      // Ván mới: chỉ sang tiết mới (giữ ghế, học phí, điểm buổi)
+      if (c.action === 'custom' && c.text === 'newRound') {
         voice.stop();
         chatter.current = [];
         say(room.newRound(Date.now()));

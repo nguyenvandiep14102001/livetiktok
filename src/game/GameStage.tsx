@@ -114,6 +114,7 @@ export function GameStage({ game }: { game: GameState }) {
         <Motto />
         <Board v={v} now={now} />
         <DayTop v={v} />
+        <TuitionBoard />
         <TeamBoard v={v} />
         <TalkTop v={v} />
         <GiftPile v={v} />
@@ -179,6 +180,21 @@ function GiftMenu() {
           {g.caption}
         </div>
       ))}
+    </div>
+  );
+}
+
+// Bảng nhắc đóng học phí (chủ kênh 2026-11-05): cột phải giữa Thi đua tổ và Quỹ lớp — tặng hoa mới được ngồi + trả lời
+function TuitionBoard() {
+  if (!GAME.requireTuition) return null;
+  return (
+    <div className="absolute right-[8px] top-[318px] z-20 w-[168px] -rotate-1 rounded-[14px] border-[3px] border-[#c9a45c] bg-[#fff8e1]/95 px-2 pb-1 pt-2 text-[#4a2c0e] shadow-[0_6px_10px_rgba(0,0,0,0.3)]">
+      <div className="absolute -top-[18px] left-1/2 -translate-x-1/2 text-[28px]">📌</div>
+      <div className="text-center text-[16px] font-extrabold leading-tight text-[#be185d]">💰 Đóng học phí</div>
+      <div className="mt-[2px] space-y-0 text-center text-[14px] font-semibold leading-[20px]">
+        <div>🌹 Tặng hoa = vào lớp</div>
+        <div>🪑 Ngồi ghế + trả lời</div>
+      </div>
     </div>
   );
 }
@@ -253,11 +269,23 @@ function Board({ v, now }: { v: StageView; now: number }) {
         <div className="flex h-full flex-col items-center justify-center text-center">
           <div className="text-[64px] leading-none">Sắp vào học!</div>
           <div className="mt-6 text-[36px] leading-snug">
-            Cô xáo chữ, cả lớp đoán từ.
-            <br />
-            Gõ đáp án vào <b className="text-[#ffe680]">bình luận</b>
-            <br />
-            Nhanh nhất <b className="text-[#ffe680]">+10 điểm</b>
+            {GAME.requireTuition ? (
+              <>
+                🌹 Tặng hoa = <b className="text-[#ffe680]">đóng học phí</b> vào lớp
+                <br />
+                Rồi gõ đáp án vào <b className="text-[#ffe680]">bình luận</b>
+                <br />
+                Nhanh nhất <b className="text-[#ffe680]">+10 điểm</b>
+              </>
+            ) : (
+              <>
+                Cô xáo chữ, cả lớp đoán từ.
+                <br />
+                Gõ đáp án vào <b className="text-[#ffe680]">bình luận</b>
+                <br />
+                Nhanh nhất <b className="text-[#ffe680]">+10 điểm</b>
+              </>
+            )}
           </div>
           {v.topic && <div className="mt-3 text-[32px] text-[#ffe680]">🗳️ Cả lớp chọn: {v.topic}</div>}
           {v.review && <div className="mt-3 text-[32px] text-[#ffe680]">📖 Giờ ôn bài · gõ "vào lớp" để học bài mới</div>}
@@ -1192,9 +1220,13 @@ function Podium({ v }: { v: StageView }) {
 }
 
 // Dòng nhắc dưới khung "Nhanh nhất", trên hàng ghế đầu: cách được vào lớp ngồi (đổi câu mỗi 8 giây, viết ngắn)
-const SEAT_HINTS = ['⭐ Đoán nhanh, điểm cao được vào lớp ngồi!', '💬 Tương tác nhiều để giữ chỗ trong lớp nha!'];
+const SEAT_HINTS = GAME.requireTuition
+  ? ['🌹 Tặng hoa = đóng học phí, được vào lớp ngồi!', '✏️ Đã đóng học phí rồi thì gõ đáp án lấy điểm!', '⭐ Đoán nhanh, điểm cao ngồi bàn đầu!']
+  : ['⭐ Đoán nhanh, điểm cao được vào lớp ngồi!', '💬 Tương tác nhiều để giữ chỗ trong lớp nha!'];
 // đang hỏi: luôn hiện hướng dẫn cố định để người mới lướt vào hiểu ngay (chế độ nhanh 2026-11-04)
-const ASK_HINT = '💬 Gõ đáp án vào bình luận · nhanh nhất +10 điểm';
+const ASK_HINT = GAME.requireTuition
+  ? '🌹 Đóng học phí (tặng hoa) · gõ đáp án · nhanh nhất +10'
+  : '💬 Gõ đáp án vào bình luận · nhanh nhất +10 điểm';
 function SeatHint({ now, asking }: { now: number; asking: boolean }) {
   const i = asking ? -1 : Math.floor(now / 8000) % SEAT_HINTS.length;
   return (

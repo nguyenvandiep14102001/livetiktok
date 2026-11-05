@@ -869,7 +869,8 @@ export const LINES = {
     'Bấm theo dõi kênh để mai còn vào lớp đúng giờ nha cả lớp.',
     'Thả tim cho đầy bảng đi cả lớp, đủ tim là cả lớp vỗ tay.',
     'Rủ thêm bạn vào đi, lớp còn nhiều ghế trống lắm.',
-    'Ai chưa có ghế thì trả lời đúng nhiều để được vào lớp ngồi nha.',
+    'Ai chưa vào lớp thì tặng hoa đóng học phí, rồi gõ đáp án ngồi ghế nha.',
+    'Muốn ngồi ghế và trả lời thì đóng học phí bằng cách tặng hoa cô một bông nha.',
   ] as L0,
   idle: [
     'Lớp im re vậy, ngủ hết rồi hả?',

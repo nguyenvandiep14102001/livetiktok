@@ -20,7 +20,8 @@ const TEAM_SEC = GAME.teamPickSec;
 GAME.teamPickSec = 0;
 // các test cũ viết cho nhịp cũ; chế độ nhanh (2026-11-04) test riêng ở cuối file
 const FAST = { quickRead: GAME.quickRead, closeAfterTopN: GAME.closeAfterTopN, praiseShort: GAME.praiseShort, praiseEvery: GAME.praiseEvery, showEvery: GAME.showEvery, teamPickEvery: GAME.teamPickEvery };
-Object.assign(GAME, { quickRead: false, closeAfterTopN: 0, praiseShort: false, praiseEvery: 5, showEvery: 2, teamPickEvery: 1 });
+Object.assign(GAME, { quickRead: false, closeAfterTopN: 0, praiseShort: false, praiseEvery: 5, showEvery: 2, teamPickEvery: 1, requireTuition: false });
+// học phí (tặng hoa mới ngồi + trả lời) test riêng ở cuối; test cũ chạy không cần đóng học phí
 
 // ---------- chữ ----------
 assert.equal(compactVi('  Bảng   Đen! '), 'bảngđen');
@@ -1060,6 +1061,58 @@ const recessOf = (game: 'rps' | 'callup' | 'pick' | 'roll' | 'heart', seed = 0.1
     rounds.push(r.phase);
   }
   assert.deepEqual(rounds, ['team', 'intro', 'intro', 'intro', 'team']);
+}
+
+// ---------- Reset game: xoá hết ghế / học phí / điểm buổi rồi vào tiết 1 ----------
+{
+  const prev = { teamPickSec: GAME.teamPickSec, requireTuition: GAME.requireTuition };
+  Object.assign(GAME, { teamPickSec: 0, requireTuition: true });
+  const c = new Classroom([mk('BẢNG ĐEN'), mk('CÁI BÀN', 'easy', 'ban')], t);
+  c.newRound(t);
+  while (c.phase !== 'question') c.tick((t += 500));
+  c.showBoard();
+  c.gift(who(1), 1, t);
+  chat(c, 1, 'Bảng Đen', t, t);
+  assert.equal(c.students.get('u1')!.score, 0); // điểm cộng lúc reveal; nhưng đã enroll + ngồi
+  assert.ok(c.seats().some((s) => s.username === 'u1'));
+  assert.ok(c.students.get('u1')!.enrolledAt > 0);
+  c.gift(who(2), 5, t + 100);
+  assert.ok(c.flowers >= 2);
+  const said = c.resetSession((t += 1000));
+  assert.equal(c.students.size, 0, 'reset: hết học sinh trên ghế');
+  assert.equal(c.flowers, 0);
+  assert.equal(c.giftPile.length, 0);
+  assert.equal(c.round, 1, 'reset rồi bắt đầu lại tiết 1');
+  assert.ok(said.some((l) => l.main));
+  assert.equal(c.seats().length, 0);
+  Object.assign(GAME, prev);
+}
+
+// ---------- học phí: phải tặng hoa mới được ngồi ghế + trả lời (chủ kênh 2026-11-05) ----------
+{
+  const prev = { requireTuition: GAME.requireTuition, quickRead: GAME.quickRead, teamPickSec: GAME.teamPickSec };
+  Object.assign(GAME, { requireTuition: true, quickRead: false, teamPickSec: 0 });
+  const c = new Classroom([mk('BẢNG ĐEN')], t);
+  c.newRound(t);
+  while (c.phase !== 'question') c.tick((t += 500));
+  c.showBoard();
+  chat(c, 1, 'Bảng Đen', t, t);
+  assert.equal(c.correct.length, 0, 'chưa đóng học phí: đáp án không tính');
+  assert.equal(c.seats().length, 0, 'chưa tặng hoa: không có ghế');
+  assert.equal(c.view(t).roster.seated, 0);
+  // tặng hoa = đóng học phí → được ngồi ngay (kể cả chưa có điểm)
+  c.gift(who(1), 1, t);
+  assert.equal(c.seats()[0]?.username, 'u1', 'tặng hoa được ngồi ghế');
+  assert.equal(c.students.get('u1')!.enrolledAt, t);
+  // chưa mất lượt vì lúc trước chưa enroll: giờ gõ lại vẫn được
+  chat(c, 1, 'Bảng Đen', t + 10, t + 10);
+  assert.equal(c.correct[0]?.username, 'u1', 'đã đóng học phí: đáp án được tính');
+  // bạn khác chỉ chat: không vào ghế
+  chat(c, 2, 'chào cô', t + 20, t + 20);
+  assert.ok(!c.seats().some((s) => s.username === 'u2'));
+  c.gift(who(2), 1, t + 30);
+  assert.ok(c.seats().some((s) => s.username === 'u2'), 'tặng hoa bạn 2 cũng được ngồi');
+  Object.assign(GAME, prev);
 }
 
 console.log('quiz.check: tất cả đều đúng');

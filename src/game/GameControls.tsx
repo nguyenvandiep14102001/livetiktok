@@ -31,7 +31,10 @@ export function GameControls({ view, stageCount = 0 }: { view: StageView | null;
         return new Promise<void>((ok) =>
           setTimeout(async () => {
             // TikTok gắn giờ lúc gửi; tới tay bot có thể trễ tới 1,5 giây và lệch thứ tự
-            await emitTest('chat', { ...fake(i), comment, createTime: start + delay - Math.random() * 1500 }).catch(() => {});
+            const who = fake(i);
+            // học phí: mỗi bạn giả lập tặng 1 bông trước rồi mới đoán (giống người xem thật)
+            if (GAME.requireTuition) await emitTest('gift', { ...who, giftName: 'Hoa hồng', giftId: 1, diamondCount: 1, repeatCount: 1 }).catch(() => {});
+            await emitTest('chat', { ...who, comment, createTime: start + delay - Math.random() * 1500 }).catch(() => {});
             setSent(++done);
             ok();
           }, delay),
@@ -94,8 +97,30 @@ export function GameControls({ view, stageCount = 0 }: { view: StageView | null;
         <Btn onClick={() => sendControl('custom', 'skip')}>⏭ Qua phần tiếp</Btn>
         <Btn onClick={() => sendControl('custom', 'newRound')}>🔄 Ván mới</Btn>
         <Btn onClick={() => sendControl('custom', 'goodbye')}>👋 Chào tạm biệt (xuống live)</Btn>
-        <Btn onClick={() => emitTest('chat', { ...fake(Math.floor(Math.random() * 50)), comment: view?.answer.toLowerCase() ?? '' })}>✅ 1 bạn trả lời đúng</Btn>
-        <Btn onClick={() => emitTest('chat', { ...fake(Math.floor(Math.random() * 50)), comment: 'vào lớp' })}>🙋 1 bạn vào lớp</Btn>
+        <Btn
+          onClick={() => {
+            const who = fake(Math.floor(Math.random() * 50));
+            const go = async () => {
+              if (GAME.requireTuition) await emitTest('gift', { ...who, giftName: 'Hoa hồng', giftId: 1, diamondCount: 1, repeatCount: 1 });
+              await emitTest('chat', { ...who, comment: view?.answer.toLowerCase() ?? '' });
+            };
+            void go();
+          }}
+        >
+          ✅ 1 bạn trả lời đúng
+        </Btn>
+        <Btn
+          onClick={() => {
+            const who = fake(Math.floor(Math.random() * 50));
+            const go = async () => {
+              await emitTest('gift', { ...who, giftName: 'Hoa hồng', giftId: 1, diamondCount: 1, repeatCount: 1 });
+              await emitTest('chat', { ...who, comment: 'vào lớp' });
+            };
+            void go();
+          }}
+        >
+          🙋 1 bạn vào lớp (tặng hoa)
+        </Btn>
         <Btn onClick={() => emitTest('gift', { ...fake(3), giftName: 'Hoa hồng', giftId: 1, diamondCount: 1, repeatCount: 1 })}>🌹 Tặng hoa</Btn>
         <Btn onClick={() => emitTest('gift', { ...fake(4), giftName: 'Mũ', giftId: 2, diamondCount: 99, repeatCount: 1 })}>🎁 Quà to</Btn>
         <Btn onClick={() => emitTest('like', { ...fake(5), likeCount: 300 })}>❤️ 300 tim</Btn>
